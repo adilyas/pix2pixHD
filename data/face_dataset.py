@@ -21,13 +21,14 @@ class FaceDataset(BaseDataset):
         self.B_paths = sorted(make_dataset(self.dir_B))    
         assert(len(self.A_paths) == len(self.B_paths))
 
-        self.init_frame_idx(self.A_paths)
+        self.n_of_samples = min(len(A_paths), self.opt.max_dataset_size)         # number of samples to train
+
         self.scale_ratio = np.array([[0.9, 1], [1, 1], [0.9, 1], [1, 1.1], [0.9, 0.9], [0.9, 0.9]])#np.random.uniform(0.9, 1.1, size=[6, 2])
         self.scale_ratio_sym = np.array([[1, 1], [0.9, 1], [1, 1], [0.9, 1], [1, 1], [1, 1]]) #np.random.uniform(0.9, 1.1, size=[6, 2])
         self.scale_shift = np.zeros((6, 2)) #np.random.uniform(-5, 5, size=[6, 2])
 
     def __getitem__(self, index):
-        A, B, I, seq_idx = self.update_frame_idx(self.A_paths, index)
+        seq_idx = index % self.n_of_samples
         A_path = self.A_paths[seq_idx]
         B_path = self.B_paths[seq_idx]
         

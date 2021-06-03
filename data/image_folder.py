@@ -8,14 +8,16 @@ import torch.utils.data as data
 from PIL import Image
 import os
 
-IMG_EXTENSIONS = [
+ALLOWED_EXTS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
     '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.tiff'
 ]
 
+ALLOWED_EXTS = ALLOWED_EXTS + ['.txt']
+
 
 def is_image_file(filename):
-    return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
+    return any(filename.endswith(extension) for extension in ALLOWED_EXTS)
 
 
 def make_dataset(dir):
@@ -43,7 +45,7 @@ class ImageFolder(data.Dataset):
         if len(imgs) == 0:
             raise(RuntimeError("Found 0 images in: " + root + "\n"
                                "Supported image extensions are: " +
-                               ",".join(IMG_EXTENSIONS)))
+                               ",".join(ALLOWED_EXTS)))
 
         self.root = root
         self.imgs = imgs

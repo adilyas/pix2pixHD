@@ -8,7 +8,7 @@ def CreateDataset(opt):
         from data.aligned_dataset import AlignedDataset
         dataset = AlignedDataset()
     if opt.dataset_mode == 'face':
-        frm data.face_dataset import FaceDataset
+        from data.face_dataset import FaceDataset
         dataset = FaceDataset()
 
     print("dataset [%s] was created" % (dataset.name()))
