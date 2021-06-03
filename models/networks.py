@@ -19,7 +19,7 @@ def get_norm_layer(norm_type='instance'):
     if norm_type == 'batch':
         norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
     elif norm_type == 'instance':
-        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False)
+        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=True)
     else:
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
@@ -257,6 +257,7 @@ class ResnetBlock(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=32, n_downsampling=4, norm_layer=nn.BatchNorm2d):
         super(Encoder, self).__init__()        
+        print("params: {}, {}, {}, {}, {}".format(input_nc, output_nc, ngf, n_downsampling, norm_layer))
         self.output_nc = output_nc        
 
         model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), 
@@ -280,15 +281,17 @@ class Encoder(nn.Module):
         outputs = self.model(input)
 
         # instance-wise average pooling
-        outputs_mean = outputs.clone()
-        inst_list = np.unique(inst.cpu().numpy().astype(int))        
-        for i in inst_list:
-            for b in range(input.size()[0]):
-                indices = (inst[b:b+1] == int(i)).nonzero() # n x 4            
+        outputs_mean = outputs.clone()        
+        for b in range(input.size()[0]):            
+            inst_list = np.unique(inst[b].cpu().numpy().astype(int))            
+            for i in inst_list:            
+                indices = (inst[b:b+1] == int(i)).nonzero() # n x 4                
                 for j in range(self.output_nc):
                     output_ins = outputs[indices[:,0] + b, indices[:,1] + j, indices[:,2], indices[:,3]]                    
-                    mean_feat = torch.mean(output_ins).expand_as(output_ins)                                        
-                    outputs_mean[indices[:,0] + b, indices[:,1] + j, indices[:,2], indices[:,3]] = mean_feat                       
+                    mean_feat = torch.mean(output_ins).expand_as(output_ins)                    
+                    ### add random noise to output feature
+                    #mean_feat += torch.normal(torch.zeros_like(mean_feat), 0.05 * torch.ones_like(mean_feat)).cuda()                    
+                    outputs_mean[indices[:,0] + b, indices[:,1] + j, indices[:,2], indices[:,3]] = mean_feat
         return outputs_mean
 
 class MultiscaleDiscriminator(nn.Module):
