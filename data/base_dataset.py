@@ -14,6 +14,9 @@ class BaseDataset(data.Dataset):
     def initialize(self, opt):
         pass
 
+def make_power_2(n, base=32.0):    
+    return int(round(n / base) * base)
+
 def get_params(opt, size):
     w, h = size
     new_h, new_w = h, w        

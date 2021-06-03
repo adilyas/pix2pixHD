@@ -21,7 +21,7 @@ class FaceDataset(BaseDataset):
         self.B_paths = sorted(make_dataset(self.dir_B))    
         assert(len(self.A_paths) == len(self.B_paths))
 
-        self.n_of_samples = min(len(A_paths), self.opt.max_dataset_size)         # number of samples to train
+        self.n_of_samples = min(len(self.A_paths), self.opt.max_dataset_size)         # number of samples to train
 
         self.scale_ratio = np.array([[0.9, 1], [1, 1], [0.9, 1], [1, 1.1], [0.9, 0.9], [0.9, 0.9]])#np.random.uniform(0.9, 1.1, size=[6, 2])
         self.scale_ratio_sym = np.array([[1, 1], [0.9, 1], [1, 1], [0.9, 1], [1, 1], [1, 1]]) #np.random.uniform(0.9, 1.1, size=[6, 2])
@@ -32,19 +32,19 @@ class FaceDataset(BaseDataset):
         A_path = self.A_paths[seq_idx]
         B_path = self.B_paths[seq_idx]
         
-        B_img = Image.open(B_paths[start_idx]).convert('RGB')
+        B_img = Image.open(B_path).convert('RGB')
         B_size = B_img.size
-        points = np.loadtxt(A_paths[start_idx], delimiter=',')
+        points = np.loadtxt(A_path, delimiter=',')
         self.get_crop_coords(points, B_size)
         params = get_params(self.opt, self.crop(B_img).size)        
         transform_scaleA = get_transform(self.opt, params, method=Image.BILINEAR, normalize=False)
         transform_label = get_transform(self.opt, params, method=Image.NEAREST, normalize=False)
         transform_scaleB = get_transform(self.opt, params)
         
-        A, L = self.get_face_image(A_path, transform_scaleA, transform_label, B_size, B_img)
+        A, I = self.get_face_image(A_path, transform_scaleA, transform_label, B_size, B_img)
         B = transform_scaleB(self.crop(B_img))
         
-        return_list = {'label': A, 'image': B, 'inst': I, 'feat': None}
+        return_list = {'label': A, 'image': B, 'inst': I}
                 
         return return_list
 
