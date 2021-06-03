@@ -30,11 +30,11 @@ class Pix2PixHDModel(BaseModel):
         netG_input_nc = input_nc        
         if not opt.no_instance:
             netG_input_nc += 1
-        if self.use_features:
-            netG_input_nc += opt.feat_num                  
+        if self.use_features and self.opt.dataset_mode != 'face':
+            netG_input_nc += opt.feat_num
         self.netG = networks.define_G(netG_input_nc, opt.output_nc, opt.ngf, opt.netG, 
                                       opt.n_downsample_global, opt.n_blocks_global, opt.n_local_enhancers, 
-                                      opt.n_blocks_local, opt.norm, gpu_ids=self.gpu_ids)        
+                                      opt.n_blocks_local, opt.norm, gpu_ids=self.gpu_ids, opt=self.opt)        
 
         # Discriminator network
         if self.isTrain:
@@ -160,7 +160,11 @@ class Pix2PixHDModel(BaseModel):
             input_concat = torch.cat((input_label, feat_map), dim=1)                        
         else:
             input_concat = input_label
-        fake_image = self.netG.forward(input_concat)
+
+        if self.opt.dataset_mode != 'face':
+            fake_image = self.netG.forward(input_concat)
+        else:
+            fake_image = self.netG.forward(input_label, feat_map)
 
         # Fake Detection and Loss
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)

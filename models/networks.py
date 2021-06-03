@@ -25,10 +25,12 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_global=9, n_local_enhancers=1, 
-             n_blocks_local=3, norm='instance', gpu_ids=[]):    
+             n_blocks_local=3, norm='instance', gpu_ids=[], opt={}):    
     norm_layer = get_norm_layer(norm_type=norm)     
     if netG == 'global':    
         netG = GlobalGenerator(input_nc, output_nc, ngf, n_downsample_global, n_blocks_global, norm_layer)       
+    elif netG == 'global_with_features':    
+        netG = Global_with_z(input_nc, output_nc, opt.feat_num, ngf, n_downsample_global, n_blocks_global, norm_layer)
     elif netG == 'local':        
         netG = LocalEnhancer(input_nc, output_nc, ngf, n_downsample_global, n_blocks_global, 
                                   n_local_enhancers, n_blocks_local, norm_layer)
@@ -414,3 +416,52 @@ class Vgg19(torch.nn.Module):
         h_relu5 = self.slice5(h_relu4)                
         out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
         return out
+
+class Global_with_z(nn.Module):
+    def __init__(self, input_nc, output_nc, nz, ngf=64, n_downsample_G=3, n_blocks=9,
+                 norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+        super(Global_with_z, self).__init__()                
+        self.n_downsample_G = n_downsample_G        
+        max_ngf = 1024
+        activation = nn.ReLU(True)
+
+        # downsample model
+        model_downsample = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc + nz, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
+        for i in range(n_downsample_G):
+            mult = 2 ** i
+            model_downsample += [nn.Conv2d(min(ngf * mult, max_ngf), min(ngf * mult * 2, max_ngf), kernel_size=3, stride=2, padding=1),
+                                 norm_layer(min(ngf * mult * 2, max_ngf)), activation]
+
+        # internal model
+        model_resnet = []
+        mult = 2 ** n_downsample_G
+        for i in range(n_blocks):
+            model_resnet += [ResnetBlock(min(ngf*mult, max_ngf) + nz, padding_type=padding_type, norm_layer=norm_layer)]
+
+        # upsample model        
+        model_upsample = []
+        for i in range(n_downsample_G):
+            mult = 2 ** (n_downsample_G - i)
+            input_ngf = min(ngf * mult, max_ngf)
+            if i == 0:
+                input_ngf += nz * 2
+            model_upsample += [nn.ConvTranspose2d(input_ngf, min((ngf * mult // 2), max_ngf), kernel_size=3, stride=2, 
+                               padding=1, output_padding=1), norm_layer(min((ngf * mult // 2), max_ngf)), activation]        
+
+        model_upsample_conv = [nn.ReflectionPad2d(3), nn.Conv2d(ngf + nz, output_nc, kernel_size=7), nn.Tanh()]
+
+        self.model_downsample = nn.Sequential(*model_downsample)
+        self.model_resnet = nn.Sequential(*model_resnet)        
+        self.model_upsample = nn.Sequential(*model_upsample)
+        self.model_upsample_conv = nn.Sequential(*model_upsample_conv)
+        self.downsample = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)        
+
+    def forward(self, x, z):
+        z_downsample = z
+        for i in range(self.n_downsample_G):
+            z_downsample = self.downsample(z_downsample)
+        downsample = self.model_downsample(torch.cat([x, z], dim=1))                
+        resnet = self.model_resnet(torch.cat([downsample, z_downsample], dim=1))                
+        upsample = self.model_upsample(torch.cat([resnet, z_downsample], dim=1))
+        return self.model_upsample_conv(torch.cat([upsample, z], dim=1))
+
