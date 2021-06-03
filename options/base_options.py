@@ -61,6 +61,11 @@ class BaseOptions():
         self.parser.add_argument('--nef', type=int, default=16, help='# of encoder filters in the first conv layer')        
         self.parser.add_argument('--n_clusters', type=int, default=10, help='number of clusters for features')        
 
+        # face specific
+        self.parser.add_argument('--no_canny_edge', action='store_true', help='do *not* use canny edge as input')
+        self.parser.add_argument('--no_dist_map', action='store_true', help='do *not* use distance transform map as input')
+        self.parser.add_argument('--random_scale_points', action='store_true', help='randomly scale face keypoints a bit to create different results')
+
         self.initialized = True
 
     def parse(self, save=True):

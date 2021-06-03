@@ -6,8 +6,8 @@ import numpy as np
 import cv2
 from skimage import feature
 
-from data.base_dataset import BaseDataset, get_img_params, get_transform, get_video_params, concat_frame
-from data.image_folder import make_grouped_dataset, check_path_valid
+from data.base_dataset import BaseDataset, get_params, get_transform
+from data.image_folder import make_dataset
 from data.keypoint2img import interpPoints, drawEdge
 
 class FaceDataset(BaseDataset):
@@ -17,9 +17,9 @@ class FaceDataset(BaseDataset):
         self.dir_A = os.path.join(opt.dataroot, opt.phase + '_keypoints')
         self.dir_B = os.path.join(opt.dataroot, opt.phase + '_img')
         
-        self.A_paths = sorted(make_grouped_dataset(self.dir_A))
-        self.B_paths = sorted(make_grouped_dataset(self.dir_B))    
-        check_path_valid(self.A_paths, self.B_paths)
+        self.A_paths = sorted(make_dataset(self.dir_A))
+        self.B_paths = sorted(make_dataset(self.dir_B))    
+        assert(len(self.A_paths) == len(self.B_paths))
 
         self.init_frame_idx(self.A_paths)
         self.scale_ratio = np.array([[0.9, 1], [1, 1], [0.9, 1], [1, 1.1], [0.9, 0.9], [0.9, 0.9]])#np.random.uniform(0.9, 1.1, size=[6, 2])
@@ -27,44 +27,28 @@ class FaceDataset(BaseDataset):
         self.scale_shift = np.zeros((6, 2)) #np.random.uniform(-5, 5, size=[6, 2])
 
     def __getitem__(self, index):
-        A, B, I, seq_idx = self.update_frame_idx(self.A_paths, index)        
-        A_paths = self.A_paths[seq_idx]
-        B_paths = self.B_paths[seq_idx]
-        n_frames_total, start_idx, t_step = get_video_params(self.opt, self.n_frames_total, len(A_paths), self.frame_idx)
+        A, B, I, seq_idx = self.update_frame_idx(self.A_paths, index)
+        A_path = self.A_paths[seq_idx]
+        B_path = self.B_paths[seq_idx]
         
         B_img = Image.open(B_paths[start_idx]).convert('RGB')
         B_size = B_img.size
         points = np.loadtxt(A_paths[start_idx], delimiter=',')
-        is_first_frame = self.opt.isTrain or not hasattr(self, 'min_x')
-        if is_first_frame: # crop only the face region
-            self.get_crop_coords(points, B_size)
-        params = get_img_params(self.opt, self.crop(B_img).size)        
+        self.get_crop_coords(points, B_size)
+        params = get_params(self.opt, self.crop(B_img).size)        
         transform_scaleA = get_transform(self.opt, params, method=Image.BILINEAR, normalize=False)
         transform_label = get_transform(self.opt, params, method=Image.NEAREST, normalize=False)
         transform_scaleB = get_transform(self.opt, params)
         
-        # read in images        
-        frame_range = list(range(n_frames_total)) if self.A is None else [self.opt.n_frames_G-1]        
-        for i in frame_range:
-            A_path = A_paths[start_idx + i * t_step]
-            B_path = B_paths[start_idx + i * t_step]                    
-            B_img = Image.open(B_path)
-            Ai, Li = self.get_face_image(A_path, transform_scaleA, transform_label, B_size, B_img)
-            Bi = transform_scaleB(self.crop(B_img))
-            A = concat_frame(A, Ai, n_frames_total)
-            B = concat_frame(B, Bi, n_frames_total)
-            I = concat_frame(I, Li, n_frames_total)
+        A, L = self.get_face_image(A_path, transform_scaleA, transform_label, B_size, B_img)
+        B = transform_scaleB(self.crop(B_img))
         
-        if not self.opt.isTrain:
-            self.A, self.B, self.I = A, B, I
-            self.frame_idx += 1
-        change_seq = False if self.opt.isTrain else self.change_seq
-        return_list = {'label': A, 'image': B, 'inst': I, 'feat': None, 'A_path': A_path, 'change_seq': change_seq}
+        return_list = {'label': A, 'image': B, 'inst': I, 'feat': None}
                 
         return return_list
 
     def get_image(self, A_path, transform_scaleA):
-        A_img = Image.open(A_path)                
+        A_img = Image.open(A_path)
         A_scaled = transform_scaleA(self.crop(A_img))
         return A_scaled
 

@@ -16,19 +16,48 @@ class BaseDataset(data.Dataset):
 
 def get_params(opt, size):
     w, h = size
-    new_h = h
-    new_w = w
-    if opt.resize_or_crop == 'resize_and_crop':
+    new_h, new_w = h, w        
+    if 'resize' in opt.resize_or_crop:   # resize image to be loadSize x loadSize
         new_h = new_w = opt.loadSize            
-    elif opt.resize_or_crop == 'scale_width_and_crop':
+    elif 'scale_width' in opt.resize_or_crop: # scale image width to be loadSize
         new_w = opt.loadSize
         new_h = opt.loadSize * h // w
+    elif 'scaleHeight' in opt.resize_or_crop: # scale image height to be loadSize
+        new_h = opt.loadSize
+        new_w = opt.loadSize * w // h
+    elif 'randomScaleWidth' in opt.resize_or_crop:  # randomly scale image width to be somewhere between loadSize and fineSize
+        new_w = random.randint(opt.fineSize, opt.loadSize + 1)
+        new_h = new_w * h // w
+    elif 'randomScaleHeight' in opt.resize_or_crop: # randomly scale image height to be somewhere between loadSize and fineSize
+        new_h = random.randint(opt.fineSize, opt.loadSize + 1)
+        new_w = new_h * w // h
+    new_w = int(round(new_w / 4)) * 4
+    new_h = int(round(new_h / 4)) * 4    
 
-    x = random.randint(0, np.maximum(0, new_w - opt.fineSize))
-    y = random.randint(0, np.maximum(0, new_h - opt.fineSize))
-    
-    flip = random.random() > 0.5
-    return {'crop_pos': (x, y), 'flip': flip}
+    crop_x = crop_y = 0
+    crop_w = crop_h = 0
+    if 'crop' in opt.resize_or_crop or 'scaledCrop' in opt.resize_or_crop:
+        if 'crop' in opt.resize_or_crop:      # crop patches of size fineSize x fineSize
+            crop_w = crop_h = opt.fineSize
+        else:
+            if 'Width' in opt.resize_or_crop: # crop patches of width fineSize
+                crop_w = opt.fineSize
+                crop_h = opt.fineSize * h // w
+            else:                              # crop patches of height fineSize
+                crop_h = opt.fineSize
+                crop_w = opt.fineSize * w // h
+
+        crop_w, crop_h = make_power_2(crop_w), make_power_2(crop_h)        
+        x_span = (new_w - crop_w) // 2
+        crop_x = np.maximum(0, np.minimum(x_span*2, int(np.random.randn() * x_span/3 + x_span)))        
+        crop_y = random.randint(0, np.minimum(np.maximum(0, new_h - crop_h), new_h // 8))
+        #crop_x = random.randint(0, np.maximum(0, new_w - crop_w))
+        #crop_y = random.randint(0, np.maximum(0, new_h - crop_h))        
+    else:
+        new_w, new_h = make_power_2(new_w), make_power_2(new_h)
+
+    flip = (random.random() > 0.5) and (opt.dataset_mode != 'pose')
+    return {'new_size': (new_w, new_h), 'crop_size': (crop_w, crop_h), 'crop_pos': (crop_x, crop_y), 'flip': flip}
 
 def get_transform(opt, params, method=Image.BICUBIC, normalize=True):
     transform_list = []
